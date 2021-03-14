@@ -3,10 +3,11 @@
   "version": "0.1.0",
   "description": "Mediasoup Sample Code",
   "main": "server.js",
+"heroku-postbuild": "rollup -c",
   "scripts": {
-    "build": "npx rollup -c",
-    "build-client-dev": "npx rollup -c -w",
-    "start": "npx rollup -c && node server.js"
+    "build": "rollup -c",
+    "build-client-dev": "rollup -c -w",
+    "start": "rollup -c && node server.js"
   },
   "author": "Kwindla Hultman Kramer",
   "license": "ISC",
