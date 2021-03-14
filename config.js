@@ -73,7 +73,7 @@ const config = {
     // run anywhere but on localhost
     webRtcTransport: {
       listenIps: getListenIps(),
-      initialAvailableOutgoingBitrate: 2_000_000,
+      initialAvailableOutgoingBitrate: 2000000,
     },
   },
 }
