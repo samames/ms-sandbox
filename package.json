@@ -6,7 +6,7 @@
   "scripts": {
     "bild": "rollup -c",
     "build-client-dev": "rollup -c -w",
-    "start": "node server.js"
+    "start": "npx rollup -c && node server.js"
   },
   "author": "Kwindla Hultman Kramer",
   "license": "ISC",
