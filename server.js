@@ -26,8 +26,8 @@ const roomState = {
   // internal
   transports: {},
   producers: [],
-  consumers: []
-}
+  consumers: [],
+};
 //
 // for each peer that connects, we keep a table of peers and what
 // tracks are being sent and received. we also need to know the last
@@ -93,17 +93,16 @@ async function main() {
 
   // start https server, falling back to http if https fails
   console.log('starting express');
-    expressApp.listen(config.httpPort, config.httpIp, () => {
-      console.log(`http server listening on port ${config.httpPort}`);
-    });
-  }
+  expressApp.listen(process.env.PORT || config.httpPort, config.httpIp, () => {
+    console.log(`http server listening on port ${config.httpPort}`);
+  });
 
   // periodically clean up peers that disconnected without sending us
   // a final "beacon"
   setInterval(() => {
     let now = Date.now();
     Object.entries(roomState.peers).forEach(([id, p]) => {
-      if ((now - p.lastSeenTs) > config.httpPeerStale) {
+      if (now - p.lastSeenTs > config.httpPeerStale) {
         warn(`removing stale peer ${id}`);
         closePeer(id);
       }
@@ -115,7 +114,6 @@ async function main() {
 }
 
 main();
-
 
 //
 // start mediasoup with a single worker and router
@@ -140,8 +138,8 @@ async function startMediasoup() {
   // audioLevelObserver for signaling active speaker
   //
   const audioLevelObserver = await router.createAudioLevelObserver({
-		interval: 800
-	});
+    interval: 800,
+  });
   audioLevelObserver.on('volumes', (volumes) => {
     const { producer, volume } = volumes[0];
     log('audio-level volumes event', producer.appData.peerId, volume);
@@ -189,7 +187,7 @@ expressApp.post('/signaling/sync', async (req, res) => {
 
     res.send({
       peers: roomState.peers,
-      activeSpeaker: roomState.activeSpeaker
+      activeSpeaker: roomState.activeSpeaker,
     });
   } catch (e) {
     console.error(e.message);
@@ -206,13 +204,15 @@ expressApp.post('/signaling/sync', async (req, res) => {
 expressApp.post('/signaling/join-as-new-peer', async (req, res) => {
   try {
     let { peerId } = req.body,
-        now = Date.now();
+      now = Date.now();
     log('join-as-new-peer', peerId);
 
     roomState.peers[peerId] = {
       joinTs: now,
       lastSeenTs: now,
-      media: {}, consumerLayers: {}, stats: {}
+      media: {},
+      consumerLayers: {},
+      stats: {},
     };
 
     res.send({ routerRtpCapabilities: router.rtpCapabilities });
@@ -273,13 +273,15 @@ async function closeProducer(producer) {
     await producer.close();
 
     // remove this producer from our roomState.producers list
-    roomState.producers = roomState.producers
-      .filter((p) => p.id !== producer.id);
+    roomState.producers = roomState.producers.filter(
+      (p) => p.id !== producer.id
+    );
 
     // remove this track's info from our roomState...mediaTag bookkeeping
     if (roomState.peers[producer.appData.peerId]) {
-      delete (roomState.peers[producer.appData.peerId]
-              .media[producer.appData.mediaTag]);
+      delete roomState.peers[producer.appData.peerId].media[
+        producer.appData.mediaTag
+      ];
     }
   } catch (e) {
     err(e);
@@ -299,7 +301,6 @@ async function closeConsumer(consumer) {
   }
 }
 
-
 // --> /signaling/create-transport
 //
 // create a mediasoup transport object and send back info needed
@@ -315,7 +316,7 @@ expressApp.post('/signaling/create-transport', async (req, res) => {
 
     let { id, iceParameters, iceCandidates, dtlsParameters } = transport;
     res.send({
-      transportOptions: { id, iceParameters, iceCandidates, dtlsParameters }
+      transportOptions: { id, iceParameters, iceCandidates, dtlsParameters },
     });
   } catch (e) {
     console.error('error in /signaling/create-transport', e);
@@ -326,7 +327,7 @@ expressApp.post('/signaling/create-transport', async (req, res) => {
 async function createWebRtcTransport({ peerId, direction }) {
   const {
     listenIps,
-    initialAvailableOutgoingBitrate
+    initialAvailableOutgoingBitrate,
   } = config.mediasoup.webRtcTransport;
 
   const transport = await router.createWebRtcTransport({
@@ -335,7 +336,7 @@ async function createWebRtcTransport({ peerId, direction }) {
     enableTcp: true,
     preferUdp: true,
     initialAvailableOutgoingBitrate: initialAvailableOutgoingBitrate,
-    appData: { peerId, clientDirection: direction }
+    appData: { peerId, clientDirection: direction },
   });
 
   return transport;
@@ -349,7 +350,7 @@ async function createWebRtcTransport({ peerId, direction }) {
 expressApp.post('/signaling/connect-transport', async (req, res) => {
   try {
     let { peerId, transportId, dtlsParameters } = req.body,
-        transport = roomState.transports[transportId];
+      transport = roomState.transports[transportId];
 
     if (!transport) {
       err(`connect-transport: server-side transport ${transportId} not found`);
@@ -375,7 +376,7 @@ expressApp.post('/signaling/connect-transport', async (req, res) => {
 expressApp.post('/signaling/close-transport', async (req, res) => {
   try {
     let { peerId, transportId } = req.body,
-        transport = roomState.transports[transportId];
+      transport = roomState.transports[transportId];
 
     if (!transport) {
       err(`close-transport: server-side transport ${transportId} not found`);
@@ -400,7 +401,7 @@ expressApp.post('/signaling/close-transport', async (req, res) => {
 expressApp.post('/signaling/close-producer', async (req, res) => {
   try {
     let { peerId, producerId } = req.body,
-        producer = roomState.producers.find((p) => p.id === producerId);
+      producer = roomState.producers.find((p) => p.id === producerId);
 
     if (!producer) {
       err(`close-producer: server-side producer ${producerId} not found`);
@@ -418,20 +419,25 @@ expressApp.post('/signaling/close-producer', async (req, res) => {
   }
 });
 
-
 // --> /signaling/send-track
 //
 // called from inside a client's `transport.on('produce')` event handler.
 //
 expressApp.post('/signaling/send-track', async (req, res) => {
   try {
-    let { peerId, transportId, kind, rtpParameters,
-          paused=false, appData } = req.body,
-        transport = roomState.transports[transportId];
+    let {
+        peerId,
+        transportId,
+        kind,
+        rtpParameters,
+        paused = false,
+        appData,
+      } = req.body,
+      transport = roomState.transports[transportId];
 
     if (!transport) {
       err(`send-track: server-side transport ${transportId} not found`);
-      res.send({ error: `server-side transport ${transportId} not found`});
+      res.send({ error: `server-side transport ${transportId} not found` });
       return;
     }
 
@@ -439,12 +445,12 @@ expressApp.post('/signaling/send-track', async (req, res) => {
       kind,
       rtpParameters,
       paused,
-      appData: { ...appData, peerId, transportId }
+      appData: { ...appData, peerId, transportId },
     });
 
     // if our associated transport closes, close ourself, too
     producer.on('transportclose', () => {
-      log('producer\'s transport closed', producer.id);
+      log("producer's transport closed", producer.id);
       closeProducer(producer);
     });
 
@@ -458,12 +464,11 @@ expressApp.post('/signaling/send-track', async (req, res) => {
     roomState.producers.push(producer);
     roomState.peers[peerId].media[appData.mediaTag] = {
       paused,
-      encodings: rtpParameters.encodings
+      encodings: rtpParameters.encodings,
     };
 
     res.send({ id: producer.id });
-  } catch (e) {
-  }
+  } catch (e) {}
 });
 
 // --> /signaling/recv-track
@@ -478,28 +483,26 @@ expressApp.post('/signaling/recv-track', async (req, res) => {
     let { peerId, mediaPeerId, mediaTag, rtpCapabilities } = req.body;
 
     let producer = roomState.producers.find(
-      (p) => p.appData.mediaTag === mediaTag &&
-             p.appData.peerId === mediaPeerId
+      (p) => p.appData.mediaTag === mediaTag && p.appData.peerId === mediaPeerId
     );
 
     if (!producer) {
-      let msg = 'server-side producer for ' +
-                  `${mediaPeerId}:${mediaTag} not found`;
+      let msg =
+        'server-side producer for ' + `${mediaPeerId}:${mediaTag} not found`;
       err('recv-track: ' + msg);
       res.send({ error: msg });
       return;
     }
 
-    if (!router.canConsume({ producerId: producer.id,
-                             rtpCapabilities })) {
+    if (!router.canConsume({ producerId: producer.id, rtpCapabilities })) {
       let msg = `client cannot consume ${mediaPeerId}:${mediaTag}`;
       err(`recv-track: ${peerId} ${msg}`);
       res.send({ error: msg });
       return;
     }
 
-    let transport = Object.values(roomState.transports).find((t) =>
-      t.appData.peerId === peerId && t.appData.clientDirection === 'recv'
+    let transport = Object.values(roomState.transports).find(
+      (t) => t.appData.peerId === peerId && t.appData.clientDirection === 'recv'
     );
 
     if (!transport) {
@@ -513,7 +516,7 @@ expressApp.post('/signaling/recv-track', async (req, res) => {
       producerId: producer.id,
       rtpCapabilities,
       paused: true, // see note above about always starting paused
-      appData: { peerId, mediaPeerId, mediaTag }
+      appData: { peerId, mediaPeerId, mediaTag },
     });
 
     // need both 'transportclose' and 'producerclose' event handlers,
@@ -534,16 +537,18 @@ expressApp.post('/signaling/recv-track', async (req, res) => {
     roomState.consumers.push(consumer);
     roomState.peers[peerId].consumerLayers[consumer.id] = {
       currentLayer: null,
-      clientSelectedLayer: null
+      clientSelectedLayer: null,
     };
 
     // update above data structure when layer changes.
     consumer.on('layerschange', (layers) => {
       log(`consumer layerschange ${mediaPeerId}->${peerId}`, mediaTag, layers);
-      if (roomState.peers[peerId] &&
-          roomState.peers[peerId].consumerLayers[consumer.id]) {
+      if (
+        roomState.peers[peerId] &&
         roomState.peers[peerId].consumerLayers[consumer.id]
-          .currentLayer = layers && layers.spatialLayer;
+      ) {
+        roomState.peers[peerId].consumerLayers[consumer.id].currentLayer =
+          layers && layers.spatialLayer;
       }
     });
 
@@ -553,11 +558,11 @@ expressApp.post('/signaling/recv-track', async (req, res) => {
       kind: consumer.kind,
       rtpParameters: consumer.rtpParameters,
       type: consumer.type,
-      producerPaused: consumer.producerPaused
+      producerPaused: consumer.producerPaused,
     });
   } catch (e) {
     console.error('error in /signaling/recv-track', e);
-    res.send ({ error: e });
+    res.send({ error: e });
   }
 });
 
@@ -568,7 +573,7 @@ expressApp.post('/signaling/recv-track', async (req, res) => {
 expressApp.post('/signaling/pause-consumer', async (req, res) => {
   try {
     let { peerId, consumerId } = req.body,
-        consumer = roomState.consumers.find((c) => c.id === consumerId);
+      consumer = roomState.consumers.find((c) => c.id === consumerId);
 
     if (!consumer) {
       err(`pause-consumer: server-side consumer ${consumerId} not found`);
@@ -580,7 +585,7 @@ expressApp.post('/signaling/pause-consumer', async (req, res) => {
 
     await consumer.pause();
 
-    res.send({ paused: true});
+    res.send({ paused: true });
   } catch (e) {
     console.error('error in /signaling/pause-consumer', e);
     res.send({ error: e });
@@ -594,7 +599,7 @@ expressApp.post('/signaling/pause-consumer', async (req, res) => {
 expressApp.post('/signaling/resume-consumer', async (req, res) => {
   try {
     let { peerId, consumerId } = req.body,
-        consumer = roomState.consumers.find((c) => c.id === consumerId);
+      consumer = roomState.consumers.find((c) => c.id === consumerId);
 
     if (!consumer) {
       err(`pause-consumer: server-side consumer ${consumerId} not found`);
@@ -620,7 +625,7 @@ expressApp.post('/signaling/resume-consumer', async (req, res) => {
 //
 expressApp.post('/signaling/close-consumer', async (req, res) => {
   try {
-  let { peerId, consumerId } = req.body,
+    let { peerId, consumerId } = req.body,
       consumer = roomState.consumers.find((c) => c.id === consumerId);
 
     if (!consumer) {
@@ -646,7 +651,7 @@ expressApp.post('/signaling/close-consumer', async (req, res) => {
 expressApp.post('/signaling/consumer-set-layers', async (req, res) => {
   try {
     let { peerId, consumerId, spatialLayer } = req.body,
-        consumer = roomState.consumers.find((c) => c.id === consumerId);
+      consumer = roomState.consumers.find((c) => c.id === consumerId);
 
     if (!consumer) {
       err(`consumer-set-layers: server-side consumer ${consumerId} not found`);
@@ -672,7 +677,7 @@ expressApp.post('/signaling/consumer-set-layers', async (req, res) => {
 expressApp.post('/signaling/pause-producer', async (req, res) => {
   try {
     let { peerId, producerId } = req.body,
-        producer = roomState.producers.find((p) => p.id === producerId);
+      producer = roomState.producers.find((p) => p.id === producerId);
 
     if (!producer) {
       err(`pause-producer: server-side producer ${producerId} not found`);
@@ -700,7 +705,7 @@ expressApp.post('/signaling/pause-producer', async (req, res) => {
 expressApp.post('/signaling/resume-producer', async (req, res) => {
   try {
     let { peerId, producerId } = req.body,
-        producer = roomState.producers.find((p) => p.id === producerId);
+      producer = roomState.producers.find((p) => p.id === producerId);
 
     if (!producer) {
       err(`resume-producer: server-side producer ${producerId} not found`);
@@ -732,13 +737,13 @@ async function updatePeerStats() {
     }
     try {
       let stats = await producer.getStats(),
-          peerId = producer.appData.peerId;
+        peerId = producer.appData.peerId;
       roomState.peers[peerId].stats[producer.id] = stats.map((s) => ({
         bitrate: s.bitrate,
         fractionLost: s.fractionLost,
         jitter: s.jitter,
         score: s.score,
-        rid: s.rid
+        rid: s.rid,
       }));
     } catch (e) {
       warn('error while updating producer stats', e);
@@ -747,17 +752,18 @@ async function updatePeerStats() {
 
   for (let consumer of roomState.consumers) {
     try {
-      let stats = (await consumer.getStats())
-                    .find((s) => s.type === 'outbound-rtp'),
-          peerId = consumer.appData.peerId;
+      let stats = (await consumer.getStats()).find(
+          (s) => s.type === 'outbound-rtp'
+        ),
+        peerId = consumer.appData.peerId;
       if (!stats || !roomState.peers[peerId]) {
         continue;
       }
       roomState.peers[peerId].stats[consumer.id] = {
         bitrate: stats.bitrate,
         fractionLost: stats.fractionLost,
-        score: stats.score
-      }
+        score: stats.score,
+      };
     } catch (e) {
       warn('error while updating consumer stats', e);
     }
