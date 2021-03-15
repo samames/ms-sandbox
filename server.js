@@ -93,10 +93,33 @@ async function main() {
 
   // start https server, falling back to http if https fails
   console.log('starting express');
-  expressApp.listen(process.env.PORT || config.httpPort, config.httpIp, () => {
-    console.log(`http server listening on port ${config.httpPort}`);
-  });
-
+  try {
+    const tls = {
+      cert: fs.readFileSync(config.sslCrt),
+      key: fs.readFileSync(config.sslKey),
+    };
+    httpsServer = https.createServer(tls, expressApp);
+    httpsServer.on('error', (e) => {
+      console.error('https server error,', e.message);
+    });
+    await new Promise((resolve) => {
+      httpsServer.listen(config.httpPort, config.httpIp, () => {
+        console.log(`server is running and listening on ` +
+                    `https://${config.httpIp}:${config.httpPort}`);
+        resolve();
+      });
+    });
+  } catch (e) {
+    if (e.code === 'ENOENT') {
+      console.error('no certificates found (check config.js)');
+      console.error('  could not start https server ... trying http');
+    } else {
+      err('could not start https server', e);
+    }
+    expressApp.listen(config.httpPort, config.httpIp, () => {
+      console.log(`http server listening on port ${config.httpPort}`);
+    });
+  }
   // periodically clean up peers that disconnected without sending us
   // a final "beacon"
   setInterval(() => {
